@@ -4,7 +4,7 @@
     "icon": "fa-brands fa-python",
     "color": "#ffd43b",
     "units": ["Unit 1", "Unit 2"],
-    "links": ["#", "#"]
+    "links": ["https://files.catbox.moe/t74vgx.pdf", "#"]
   },
   "c": {
     "title": "C Language",
