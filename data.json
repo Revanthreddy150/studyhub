@@ -1,0 +1,23 @@
+{
+  "python": {
+    "title": "Python",
+    "icon": "fa-brands fa-python",
+    "color": "#ffd43b",
+    "units": ["Unit 1", "Unit 2"],
+    "links": ["#", "#"]
+  },
+  "c": {
+    "title": "C Language",
+    "icon": "fa-solid fa-c",
+    "color": "#00599C",
+    "units": ["Unit 1", "Unit 2"],
+    "links": ["#", "#"]
+  },
+  "ai": {
+    "title": "AI",
+    "icon": "fa-solid fa-brain",
+    "color": "#00f2ff",
+    "units": ["Unit 1", "Unit 2"],
+    "links": ["#", "#"]
+  }
+}
