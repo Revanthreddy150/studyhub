@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,7 +21,7 @@ body{background:#0d1117;color:white;min-height:100vh;}
 .unit-card:hover{border:1px solid #00f2ff;}
 #pdfViewerBox{display:none;margin-top:20px;}
 #pdfFrame{width:100%;height:500px;border-radius:10px;border:1px solid #00f2ff;}
-.owner-btn{background:#00f2ff;color:black;padding:10px 20px;border:none;border-radius:30px;cursor:pointer;}
+.owner-btn{background:#00f2ff;color:black;padding:10px 20px;border:none;border-radius:30px;cursor:pointer;margin-top:10px;}
 </style>
 </head>
 
@@ -39,8 +39,10 @@ body{background:#0d1117;color:white;min-height:100vh;}
 
 <div id="pdfViewerBox">
 <iframe id="pdfFrame"></iframe>
-<br><br>
+<br>
 <a id="downloadBtn" class="owner-btn" target="_blank" download>⬇ Download PDF</a>
+<br>
+<button onclick="openFullScreen()" class="owner-btn">🔍 Full Screen</button>
 </div>
 
 <br>
@@ -48,7 +50,6 @@ body{background:#0d1117;color:white;min-height:100vh;}
 </div>
 
 <script>
-
 let subjectData = {};
 let currentSubjectKey = "";
 
@@ -99,19 +100,33 @@ function openPDF(i){
     let link = subjectData[currentSubjectKey].links[i];
     if(link && link !== "#"){
         document.getElementById("pdfViewerBox").style.display="block";
-        document.getElementById("pdfFrame").src = link;
+        // Google Docs Viewer embed
+        let embedURL = "https://docs.google.com/gview?embedded=true&url=" + encodeURIComponent(link);
+        document.getElementById("pdfFrame").src = embedURL;
         document.getElementById("downloadBtn").href = link;
-    }else{
+    } else {
         alert("PDF not available yet.");
     }
 }
 
+/* FULL SCREEN PDF */
+function openFullScreen(){
+    let iframe = document.getElementById("pdfFrame");
+    if (iframe.requestFullscreen) {
+        iframe.requestFullscreen();
+    } else if (iframe.webkitRequestFullscreen) {
+        iframe.webkitRequestFullscreen();
+    } else if (iframe.msRequestFullscreen) {
+        iframe.msRequestFullscreen();
+    }
+}
+
+/* GO BACK TO SUBJECTS */
 function goBack(){
     document.getElementById("notesArea").style.display="none";
     document.getElementById("mainGrid").style.display="grid";
     document.getElementById("pdfViewerBox").style.display="none";
 }
-
 </script>
 
 </body>
