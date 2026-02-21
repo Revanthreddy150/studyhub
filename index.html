@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Study Hub</title>
 
+<!-- Google Fonts & FontAwesome -->
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- PDF.js library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.15.349/pdf.min.js"></script>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins',sans-serif;}
@@ -19,12 +23,13 @@ body{background:#0d1117;color:white;min-height:100vh;}
 .notes-section{display:none;padding:20px;}
 .unit-card{background:#161b22;margin:10px 0;padding:12px;border-radius:8px;cursor:pointer;border:1px solid #30363d;}
 .unit-card:hover{border:1px solid #00f2ff;}
-#pdfViewerBox{display:none;margin-top:20px;}
-#pdfFrame{width:100%;height:500px;border-radius:10px;border:1px solid #00f2ff;}
-.owner-btn{background:#00f2ff;color:black;padding:10px 20px;border:none;border-radius:30px;cursor:pointer;margin-top:10px;}
+#pdfViewerBox{display:none;margin-top:20px;background:#161b22;padding:10px;border-radius:10px;}
+#pdfCanvas{width:100%;border:1px solid #00f2ff;border-radius:8px;}
+.owner-btn{background:#00f2ff;color:black;padding:10px 20px;border:none;border-radius:30px;margin:5px;cursor:pointer;}
+.admin-panel{position:fixed;bottom:0;left:0;width:100%;background:#111;padding:15px;border-top:2px solid #00f2ff;display:none;}
+textarea{width:100%;height:120px;background:#161b22;color:#fff;border:1px solid #00f2ff;border-radius:8px;padding:8px;}
 </style>
 </head>
-
 <body>
 
 <div class="header">
@@ -38,10 +43,8 @@ body{background:#0d1117;color:white;min-height:100vh;}
 <div id="unitList"></div>
 
 <div id="pdfViewerBox">
-<iframe id="pdfFrame"></iframe>
-<br>
+<canvas id="pdfCanvas"></canvas><br>
 <a id="downloadBtn" class="owner-btn" target="_blank" download>⬇ Download PDF</a>
-<br>
 <button onclick="openFullScreen()" class="owner-btn">🔍 Full Screen</button>
 </div>
 
@@ -49,85 +52,143 @@ body{background:#0d1117;color:white;min-height:100vh;}
 <button class="owner-btn" onclick="goBack()">← Back</button>
 </div>
 
+<!-- Admin Panel -->
+<div class="admin-panel" id="adminPanel">
+<h3>Admin Dashboard</h3>
+<button class="owner-btn" onclick="addSubject()">+ Add Subject</button>
+<button class="owner-btn" onclick="addUnit()">+ Add Unit</button>
+<button class="owner-btn" onclick="exportJSON()">💾 Export JSON</button>
+<button class="owner-btn" onclick="closeAdmin()">Exit Admin</button>
+<br>
+<textarea id="editJSON"></textarea>
+<button class="owner-btn" onclick="saveJSON()">Save JSON Changes</button>
+</div>
+
 <script>
-let subjectData = {};
+let subjectData = {
+  "python": { "title":"Python", "icon":"fa-brands fa-python", "color":"#ffd43b", "units":["Unit 1","Unit 2"], "links":["#","#"] },
+  "c": { "title":"C Language", "icon":"fa-solid fa-c", "color":"#00599C", "units":["Unit 1","Unit 2"], "links":["#","#"] }
+};
 let currentSubjectKey = "";
+let currentUnitIndex = null;
+let pdfDoc = null;
 
-/* LOAD JSON DATA */
-fetch("data.json")
-.then(res => res.json())
-.then(data => {
-    subjectData = data;
-    renderDashboard();
-})
-.catch(err => {
-    alert("Error loading data.json");
-});
-
-/* RENDER SUBJECTS */
+// Render subjects
 function renderDashboard(){
-    const grid = document.getElementById("mainGrid");
-    grid.innerHTML = "";
-    for(let key in subjectData){
-        grid.innerHTML += `
-        <div class="card" onclick="showNotes('${key}')">
-            <i class="${subjectData[key].icon}" style="font-size:40px;color:${subjectData[key].color};"></i>
-            <h3>${subjectData[key].title}</h3>
-        </div>`;
-    }
+  const grid = document.getElementById("mainGrid");
+  grid.innerHTML = "";
+  for(let key in subjectData){
+    grid.innerHTML += `<div class="card" onclick="showNotes('${key}')">
+      <i class="${subjectData[key].icon}" style="font-size:40px;color:${subjectData[key].color};"></i>
+      <h3>${subjectData[key].title}</h3>
+    </div>`;
+  }
 }
 
-/* SHOW UNITS */
+// Show units
 function showNotes(key){
-    currentSubjectKey = key;
-    document.getElementById("mainGrid").style.display="none";
-    document.getElementById("notesArea").style.display="block";
-    document.getElementById("noteTitle").innerText = subjectData[key].title;
+  currentSubjectKey = key;
+  document.getElementById("mainGrid").style.display="none";
+  document.getElementById("notesArea").style.display="block";
+  document.getElementById("noteTitle").innerText = subjectData[key].title;
 
-    let list = document.getElementById("unitList");
-    list.innerHTML = "";
-
-    subjectData[key].units.forEach((unit,i)=>{
-        list.innerHTML += `
-        <div class="unit-card" onclick="openPDF(${i})">
-            ${unit}
-        </div>`;
-    });
+  const list = document.getElementById("unitList");
+  list.innerHTML = "";
+  subjectData[key].units.forEach((unit,i)=>{
+    list.innerHTML += `<div class="unit-card" onclick="openPDF(${i})">${unit}</div>`;
+  });
 }
 
-/* OPEN PDF INSIDE PAGE */
+// PDF.js render
 function openPDF(i){
-    let link = subjectData[currentSubjectKey].links[i];
-    if(link && link !== "#"){
-        document.getElementById("pdfViewerBox").style.display="block";
-        // Google Docs Viewer embed
-        let embedURL = "https://docs.google.com/gview?embedded=true&url=" + encodeURIComponent(link);
-        document.getElementById("pdfFrame").src = embedURL;
-        document.getElementById("downloadBtn").href = link;
-    } else {
-        alert("PDF not available yet.");
-    }
+  let link = subjectData[currentSubjectKey].links[i];
+  currentUnitIndex = i;
+  if(link && link!=="#"){
+    document.getElementById("pdfViewerBox").style.display="block";
+    document.getElementById("downloadBtn").href = link;
+    const loadingTask = pdfjsLib.getDocument(link);
+    loadingTask.promise.then(pdf => {
+      pdfDoc = pdf;
+      pdf.getPage(1).then(page=>{
+        const scale = 1.2;
+        const viewport = page.getViewport({scale});
+        const canvas = document.getElementById("pdfCanvas");
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        const renderContext = {canvasContext: context, viewport: viewport};
+        page.render(renderContext);
+      });
+    }).catch(err=>alert("Cannot load PDF. Make sure link is direct PDF."));
+  }else alert("PDF not available yet.");
 }
 
-/* FULL SCREEN PDF */
+// Full screen PDF
 function openFullScreen(){
-    let iframe = document.getElementById("pdfFrame");
-    if (iframe.requestFullscreen) {
-        iframe.requestFullscreen();
-    } else if (iframe.webkitRequestFullscreen) {
-        iframe.webkitRequestFullscreen();
-    } else if (iframe.msRequestFullscreen) {
-        iframe.msRequestFullscreen();
-    }
+  const canvas = document.getElementById("pdfCanvas");
+  if(canvas.requestFullscreen) canvas.requestFullscreen();
+  else if(canvas.webkitRequestFullscreen) canvas.webkitRequestFullscreen();
 }
 
-/* GO BACK TO SUBJECTS */
+// Back to subjects
 function goBack(){
-    document.getElementById("notesArea").style.display="none";
-    document.getElementById("mainGrid").style.display="grid";
-    document.getElementById("pdfViewerBox").style.display="none";
+  document.getElementById("notesArea").style.display="none";
+  document.getElementById("mainGrid").style.display="grid";
+  document.getElementById("pdfViewerBox").style.display="none";
 }
+
+// Admin login
+function adminLogin(){
+  let user = prompt("Admin Name:");
+  let pass = prompt("Admin Password:");
+  if(user==="study" && pass==="11"){
+    document.getElementById("adminPanel").style.display="block";
+    document.getElementById("editJSON").value = JSON.stringify(subjectData,null,2);
+  }else alert("Wrong credentials!");
+}
+
+// Admin actions
+function closeAdmin(){ document.getElementById("adminPanel").style.display="none"; }
+function addSubject(){
+  let name = prompt("Enter Subject Name:");
+  if(name){
+    let key = name.toLowerCase().replace(/\s/g,'');
+    subjectData[key] = {title:name,icon:"fa-solid fa-book",color:"#fff",units:[],links:[]};
+    renderDashboard();
+    document.getElementById("editJSON").value = JSON.stringify(subjectData,null,2);
+  }
+}
+function addUnit(){
+  if(!currentSubjectKey){ alert("Open a subject first."); return; }
+  let name = prompt("Unit Name:");
+  let link = prompt("PDF link (direct .pdf URL):");
+  if(name){ 
+    subjectData[currentSubjectKey].units.push(name);
+    subjectData[currentSubjectKey].links.push(link || "#");
+    showNotes(currentSubjectKey);
+    document.getElementById("editJSON").value = JSON.stringify(subjectData,null,2);
+  }
+}
+function exportJSON(){
+  document.getElementById("editJSON").value = JSON.stringify(subjectData,null,2);
+  alert("JSON generated. Copy and replace data.json on GitHub to update.");
+}
+function saveJSON(){
+  try{
+    subjectData = JSON.parse(document.getElementById("editJSON").value);
+    renderDashboard();
+    alert("JSON updated in page. To save permanently, replace data.json on GitHub.");
+  }catch(e){ alert("Invalid JSON!"); }
+}
+
+// Initial render
+renderDashboard();
 </script>
+
+<!-- Double-click footer to admin login -->
+<footer ondblclick="adminLogin()" style="text-align:center;padding:20px;opacity:0.5;cursor:pointer;">
+© 2026 Study Hub (Double click here to login as Admin)
+</footer>
 
 </body>
 </html>
