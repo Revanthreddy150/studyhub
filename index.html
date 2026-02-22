@@ -25,13 +25,14 @@
         .subjects { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; padding: 20px; max-width: 1000px; margin: 0 auto; }
         .card { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; text-align: center; cursor: pointer; transition: 0.3s; backdrop-filter: blur(5px); position: relative; }
         .card i { font-size: 2.5rem; margin-bottom: 10px; color: #00f2ff; }
-        .del-subj-btn { position: absolute; top: 10px; right: 10px; color: #ff5252; background: none; border: none; cursor: pointer; display: none; }
+        
+        .admin-card-tools { position: absolute; top: 10px; right: 10px; display: none; gap: 8px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; }
+        .admin-card-tools i { font-size: 0.9rem; margin: 0; cursor: pointer; }
 
         .notes-section { display: none; padding: 20px; max-width: 900px; margin: 20px auto; background: rgba(0,0,0,0.85); border-radius: 20px; border: 1px solid #00f2ff; }
         .unit-item { background: rgba(255,255,255,0.05); margin: 8px 0; padding: 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
         .unit-item.active-unit { background: rgba(0, 242, 255, 0.1); border: 1px solid #00f2ff; }
 
-        /* PDF.js Viewer Container */
         #viewer-box { display: none; margin-top: 20px; border-radius: 12px; border: 1px solid #00f2ff; background: #333; overflow: hidden; }
         .viewer-header { background: #111; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
         #pdf-iframe { width: 100%; height: 650px; border: none; background: #525659; }
@@ -116,7 +117,6 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    // Specifically targeting the document where your data lives
     const docRef = doc(db, "studyhub", "cloudData");
 
     let subjectData = {};
@@ -125,7 +125,6 @@
     let selectedIdx = null;
     let fCount = 0, hCount = 0;
 
-    // Admin Sequence
     document.getElementById('fTrig').onclick = () => { if(++fCount === 5) { openModal('infoModal'); fCount = 0; } };
     window.hClick = () => {
         if(++hCount === 5) {
@@ -139,7 +138,6 @@
         }
     };
 
-    // Firebase Sync
     onSnapshot(docRef, (s) => {
         if(s.exists()) {
             subjectData = s.data();
@@ -153,13 +151,32 @@
     window.renderSubjects = () => {
         const grid = document.getElementById('mainGrid');
         grid.innerHTML = '';
-        for (let k in subjectData) {
+        
+        // Sort subjects by position property
+        const sortedKeys = Object.keys(subjectData).sort((a, b) => {
+            return (subjectData[a].pos || 999) - (subjectData[b].pos || 999);
+        });
+
+        sortedKeys.forEach(k => {
             grid.innerHTML += `
                 <div class="card" onclick="openSubject('${k}')">
-                    ${isAdmin ? `<button class="del-subj-btn" style="display:block" onclick="event.stopPropagation(); deleteSubject('${k}')"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    <div class="admin-card-tools" style="${isAdmin ? 'display:flex' : ''}">
+                        <i class="fa-solid fa-up-down" title="Set Position" style="color:#f1c40f;" onclick="event.stopPropagation(); setPosition('${k}')"></i>
+                        <i class="fa-solid fa-pen" title="Rename" style="color:#00f2ff;" onclick="event.stopPropagation(); editSubject('${k}')"></i>
+                        <i class="fa-solid fa-trash" title="Delete" style="color:#ff5252;" onclick="event.stopPropagation(); deleteSubject('${k}')"></i>
+                    </div>
                     <i class="fa-solid fa-graduation-cap"></i>
                     <h3>${subjectData[k].title}</h3>
+                    ${isAdmin ? `<small style="color:#aaa;">Pos: ${subjectData[k].pos || 'N/A'}</small>` : ''}
                 </div>`;
+        });
+    };
+
+    window.setPosition = async (k) => {
+        let newPos = prompt("Enter position number (1, 2, 3...):", subjectData[k].pos || "");
+        if(newPos !== null) {
+            subjectData[k].pos = parseInt(newPos);
+            await updateCloud();
         }
     };
 
@@ -181,7 +198,10 @@
                 <div class="unit-item ${selectedIdx === i ? 'active-unit' : ''}" onclick="viewNote(${i})">
                     <span>${u}</span>
                     <div>
-                        ${isAdmin ? `<i class="fa-solid fa-trash" style="color:#ff5252; margin-right:15px;" onclick="event.stopPropagation(); deleteUnit(${i})"></i>` : ''}
+                        ${isAdmin ? `
+                            <i class="fa-solid fa-pen-to-square" style="color:#00f2ff; margin-right:15px;" onclick="event.stopPropagation(); editUnit(${i})"></i>
+                            <i class="fa-solid fa-trash" style="color:#ff5252; margin-right:15px;" onclick="event.stopPropagation(); deleteUnit(${i})"></i>
+                        ` : ''}
                         <i class="fa-solid fa-file-lines"></i>
                     </div>
                 </div>`;
@@ -193,18 +213,16 @@
         renderUnits();
         let rawUrl = subjectData[currentKey].links[i];
         if(isAdmin) document.getElementById('url-input-area').style.display = 'block';
-        if(!rawUrl || rawUrl === "#") return;
+        if(!rawUrl || rawUrl === "#") {
+             document.getElementById('viewer-box').style.display = 'none';
+             return;
+        }
 
-        // --- PDF.JS Viewer Logic ---
-        // Using a public PDF.js viewer to force render the PDF inside the frame
         let viewerUrl = "";
-        
         if(rawUrl.includes('drive.google.com')) {
-            // Convert Drive link to a direct file stream for the viewer
             let fileId = rawUrl.split('/d/')[1].split('/')[0];
             viewerUrl = `https://docs.google.com/viewer?url=https://drive.google.com/uc?id=${fileId}&embedded=true`;
         } else {
-            // For other links, use Google PDF Viewer wrapper to prevent the "Open" button
             viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
         }
 
@@ -219,7 +237,15 @@
         let n = prompt("Subject Name:");
         if(n) {
             let k = "id_" + Date.now();
-            subjectData[k] = { title: n, units: [], links: [] };
+            subjectData[k] = { title: n, units: [], links: [], pos: Object.keys(subjectData).length + 1 };
+            await updateCloud();
+        }
+    };
+
+    window.editSubject = async (k) => {
+        let newTitle = prompt("Edit Subject Title:", subjectData[k].title);
+        if(newTitle && newTitle !== subjectData[k].title) {
+            subjectData[k].title = newTitle;
             await updateCloud();
         }
     };
@@ -232,6 +258,15 @@
             if(!subjectData[currentKey].units) { subjectData[currentKey].units = []; subjectData[currentKey].links = []; }
             subjectData[currentKey].units.push(n);
             subjectData[currentKey].links.push("#");
+            await updateCloud();
+        }
+    };
+
+    window.editUnit = async (i) => {
+        let oldName = subjectData[currentKey].units[i];
+        let newName = prompt("Edit Unit Name:", oldName);
+        if(newName && newName !== oldName) {
+            subjectData[currentKey].units[i] = newName;
             await updateCloud();
         }
     };
@@ -251,13 +286,14 @@
             await updateCloud();
             alert("Saved Successfully!");
             document.getElementById('unitUrl').value = '';
+            viewNote(selectedIdx);
         }
     };
 
     window.openAbout = () => openModal('aboutModal');
     function openModal(id) { document.getElementById('overlay').style.display = 'block'; document.getElementById(id).style.display = 'block'; }
     window.closeAll = () => document.querySelectorAll('.modal, .overlay').forEach(e => e.style.display = 'none');
-    window.hideNotes = () => { currentKey = ''; document.getElementById('mainGrid').style.display = 'grid'; document.getElementById('notesArea').style.display = 'none'; };
+    window.hideNotes = () => { currentKey = ''; selectedIdx = null; document.getElementById('mainGrid').style.display = 'grid'; document.getElementById('notesArea').style.display = 'none'; };
     window.goFull = () => { const f = document.getElementById('pdf-iframe'); if (f.requestFullscreen) f.requestFullscreen(); else if (f.webkitRequestFullscreen) f.webkitRequestFullscreen(); };
     window.doSearch = () => {
         let q = document.getElementById('mSearch').value.toLowerCase();
