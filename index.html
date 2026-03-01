@@ -77,7 +77,7 @@
 </div>
 
 <div class="top-actions">
-    <div class="action-btn" onclick="handleSmartShare('Study Hub: Get all your notes here!')" title="Share Hub"><i class="fa-solid fa-share-nodes"></i></div>
+    <div class="action-btn" onclick="handleSmartShare('Check out Study Hub for all your notes!')" title="Share Hub"><i class="fa-solid fa-share-nodes"></i></div>
     <div class="action-btn" onclick="location.reload()" title="Refresh Page"><i class="fa-solid fa-rotate-right"></i></div>
     <div class="action-btn" onclick="openAbout()" title="About Developers"><i class="fa-solid fa-info"></i></div>
 </div>
@@ -142,7 +142,7 @@
     let isAdmin = false;
     let currentKey = '';
     let selectedIdx = null;
-    let fCount = 0, hCount = 0;
+    let fCount = 0;
 
     // --- CUSTOM TOAST ---
     window.showToast = (msg) => {
@@ -154,35 +154,40 @@
         setTimeout(() => toast.remove(), 3000);
     };
 
-    // --- SMART SHARE & COPY FIX ---
+    // --- FIXED SMART SHARE ---
     window.handleSmartShare = async (msg) => {
-        const pageUrl = window.location.href.split('?')[0]; // Clean URL
-        
-        // 1. Try Native Share
+        // Change the URL below to your actual direct hosting link if 'window.location' keeps failing
+        const shareUrl = window.location.href.includes('useas.online') ? 'https://useas.online' : window.location.href.split('?')[0];
+        const fullText = `${msg}\nLink: ${shareUrl}`;
+
+        // 1. Native Mobile Share
         if (navigator.share) {
             try {
-                await navigator.share({ title: 'Study Hub', text: msg, url: pageUrl });
+                await navigator.share({ title: 'Study Hub', text: msg, url: shareUrl });
                 return;
-            } catch (err) { console.log("Native share failed/cancelled"); }
+            } catch (err) { console.log("Native share cancelled"); }
         }
 
-        // 2. Fallback: Manual Copy (Fix for GitHub/Iframe hosting)
+        // 2. Modern Clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(fullText);
+                showToast("Link Copied to Clipboard!");
+                return;
+            } catch (err) { console.log("Clipboard API failed"); }
+        }
+
+        // 3. Old School Fallback (Hidden Textarea)
         try {
             const textArea = document.createElement("textarea");
-            textArea.value = pageUrl;
+            textArea.value = fullText;
             document.body.appendChild(textArea);
-            textArea.focus();
             textArea.select();
-            const successful = document.execCommand('copy');
+            document.execCommand('copy');
             document.body.removeChild(textArea);
-            
-            if (successful) {
-                showToast("Link Copied! Share it with friends.");
-            } else {
-                throw new Error("Copy command failed");
-            }
+            showToast("Link Copied!");
         } catch (err) {
-            prompt("Study Hub: Browser blocked auto-copy. Copy this link:", pageUrl);
+            prompt("Copy this link:", shareUrl);
         }
     };
 
@@ -242,7 +247,7 @@
                 <div class="unit-item" onclick="viewNote(${i})">
                     <span>${u}</span>
                     <div class="unit-actions">
-                        <i class="fa-solid fa-share-nodes" style="color:#00f2ff; cursor:pointer;" onclick="event.stopPropagation(); handleSmartShare('Check out ${u} on Study Hub!')"></i>
+                        <i class="fa-solid fa-share-nodes" style="color:#00f2ff; cursor:pointer;" onclick="event.stopPropagation(); handleSmartShare('Check out ${u} notes!')"></i>
                         ${isAdmin ? `<i class="fa-solid fa-trash" style="color:#ff5252; cursor:pointer;" onclick="event.stopPropagation(); deleteUnit(${i})"></i>` : ''}
                         <i class="fa-solid fa-file-pdf" style="color:#e74c3c;"></i>
                     </div>
