@@ -53,21 +53,23 @@
         .media-wrapper { flex-grow: 1; width: 100%; height: 100%; position: relative; }
         #pdf-frame, #video-frame { width: 100%; height: 100%; border: none; background: #000; display: block; }
 
-        /* V2 Impact Loader */
+        /* V2 Pro Status Loader */
         #v2-loader { 
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: #000; z-index: 9999; flex-direction: column; align-items: center; 
-            justify-content: center; text-align: center;
+            background: rgba(0,0,0,0.95); z-index: 9999; flex-direction: column; align-items: center; 
+            justify-content: center; text-align: center; backdrop-filter: blur(10px);
         }
-        .impact-circle {
-            width: 100px; height: 100px; border: 5px solid #00f2ff; border-radius: 50%;
-            animation: impact 1s ease-out infinite; position: relative;
+        .v2-logo-spin {
+            font-size: 3rem; color: #00f2ff; margin-bottom: 20px;
+            animation: pulse 1.5s infinite ease-in-out;
         }
-        @keyframes impact {
-            0% { transform: scale(0.5); opacity: 1; box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.7); }
-            100% { transform: scale(1.5); opacity: 0; box-shadow: 0 0 50px 20px rgba(0, 242, 255, 0); }
-        }
-        .loader-text { margin-top: 20px; font-size: 1.5rem; font-weight: bold; color: #00f2ff; text-transform: uppercase; letter-spacing: 2px; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; text-shadow: 0 0 20px #00f2ff; } }
+        
+        .loader-main-text { font-size: 1.2rem; font-weight: 600; color: #00f2ff; letter-spacing: 3px; margin-bottom: 5px; text-transform: uppercase; }
+        .loader-sub-text { font-size: 0.8rem; color: rgba(255,255,255,0.6); font-style: italic; min-height: 20px; }
+        
+        .progress-bar-container { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 20px; overflow: hidden; }
+        #v2-progress { width: 0%; height: 100%; background: #00f2ff; transition: 1s linear; box-shadow: 0 0 10px #00f2ff; }
 
         .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1500; }
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111; padding: 25px; border-radius: 15px; border: 1px solid #00f2ff; z-index: 2000; text-align: center; width: 320px; }
@@ -83,9 +85,12 @@
 <div id="toast-container"></div>
 
 <div id="v2-loader">
-    <div class="impact-circle"></div>
-    <div class="loader-text">USEAS Loading PDF...</div>
-    <div id="v2-timer" style="font-size: 3rem; margin-top: 10px; color: #fff;">5</div>
+    <div class="v2-logo-spin"><i class="fa-solid fa-shield-halved"></i></div>
+    <div class="loader-main-text">USEAS NETWORK</div>
+    <div id="v2-status" class="loader-sub-text">Initializing Secure Tunnel...</div>
+    <div class="progress-bar-container">
+        <div id="v2-progress"></div>
+    </div>
 </div>
 
 <div id="pdf-overlay">
@@ -288,7 +293,6 @@
         list.innerHTML = '';
         const units = subjectData[currentKey].units || [];
         const vids = subjectData[currentKey].vids || [];
-        
         units.forEach((u, i) => {
             const hasVid = vids[i] && vids[i] !== "#" && vids[i].trim() !== "";
             list.innerHTML += `
@@ -310,29 +314,41 @@
             document.getElementById('url-input-area').style.display = 'block';
             switchLinkType(activeLinkType); 
         }
-        
-        if(useV2Loader) {
-            startV2Loader(i);
-        } else {
-            viewNote(i);
-        }
+        if(useV2Loader) startV2Loader(i); else viewNote(i);
     };
 
+    // V2 Pro Status Loader Logic
     window.startV2Loader = (i) => {
         let rawUrl = subjectData[currentKey].links[i];
         if(!rawUrl || rawUrl === "#") { showToast("No link found!"); return; }
+
         const loader = document.getElementById('v2-loader');
-        const timerTxt = document.getElementById('v2-timer');
-        let count = 5;
+        const status = document.getElementById('v2-status');
+        const progress = document.getElementById('v2-progress');
+        
+        const msgs = [
+            "Initializing Secure Tunnel...",
+            "Verifying Link Signature...",
+            "Bypassing Encrypted Buffer...",
+            "Synchronizing Data Streams...",
+            "Authorization Successful!"
+        ];
+
         loader.style.display = 'flex';
-        timerTxt.innerText = count;
+        progress.style.width = '0%';
+        
+        let count = 0;
         const interval = setInterval(() => {
-            count--;
-            timerTxt.innerText = count;
-            if(count <= 0) {
+            status.innerText = msgs[count];
+            progress.style.width = ((count + 1) * 20) + "%";
+            count++;
+            
+            if(count >= msgs.length) {
                 clearInterval(interval);
-                loader.style.display = 'none';
-                window.open(rawUrl, '_blank');
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    window.open(rawUrl, '_blank');
+                }, 500);
             }
         }, 1000);
     };
@@ -364,29 +380,17 @@
         document.body.style.overflow = 'hidden'; 
     };
 
-    // Corrected Video Logic
     window.openVideo = (i) => {
         let rawUrl = subjectData[currentKey].vids[i];
         if(!rawUrl || rawUrl === "#" || rawUrl.trim() === "") return;
-        
         let videoId = "";
         try {
-            if(rawUrl.includes('youtu.be/')) {
-                videoId = rawUrl.split('youtu.be/')[1].split(/[?#]/)[0];
-            } else if(rawUrl.includes('youtube.com/watch')) {
-    videoId = new URL(rawUrl).searchParams.get('v');
-            } else if(rawUrl.includes('youtube.com/embed/')) {
-                videoId = rawUrl.split('embed/')[1].split(/[?#]/)[0];
-            }
-        } catch(e) { console.error("URL Parsing error", e); }
-
-        if(!videoId) {
-            showToast("Invalid Video Link!");
-            return;
-        }
-
+            if(rawUrl.includes('youtu.be/')) videoId = rawUrl.split('youtu.be/')[1].split(/[?#]/)[0];
+            else if(rawUrl.includes('youtube.com/watch')) videoId = new URL(rawUrl).searchParams.get('v');
+            else if(rawUrl.includes('youtube.com/embed/')) videoId = rawUrl.split('embed/')[1].split(/[?#]/)[0];
+        } catch(e) {}
+        if(!videoId) { showToast("Invalid Video Link!"); return; }
         document.getElementById('video-title').innerText = subjectData[currentKey].units[i];
-        // Using embed URL with autoplay and origin for security
         document.getElementById('video-frame').src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
         document.getElementById('video-overlay').style.display = 'flex';
         document.body.style.overflow = 'hidden';
